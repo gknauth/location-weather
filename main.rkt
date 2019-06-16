@@ -110,6 +110,8 @@
 (define rxi-thunderstorms #rx"(?i:thunderstorms)")
 (define rxi-t-storms #rx"(?i:t-storms)")
 
+(define align-right "label")
+
 (define (obs->tr o)
   `(tr
     ,(td-class-s (if (obs-day? o) "day" "night") (obs-dt o))
@@ -121,22 +123,23 @@
                   (regexp-match rxi-t-storms x))
               (td-class-s "red" x)]
              [else (list 'td x)]))
-    ,(td-class-s "label" (obs-prob-rain o))
-    ,(td-class-s "label" (obs-rain-in o))
+    ,(td-class-s align-right (obs-prob-rain o))
+    ,(td-class-s align-right (obs-rain-in o))
     ,(let ([x (obs-precip? o)])
        (if (= 0 (string-length x))
            (list 'td x)
            (td-class-s "green" x)))
-    ,(td-class-s "label" (obs-realfeel o))
-    ,(td-class-s "label" (obs-temp o))
-    ,(td-class-s "label" (obs-dewpoint o))
-    ,(td-class-s "label" (obs-rh o))
-    (td ,(obs-windir o))
+    ,(td-class-s align-right (obs-realfeel o))
+    ,(td-class-s align-right (obs-temp o))
+    ,(td-class-s align-right (obs-dewpoint o))
+    ,(td-class-s align-right (obs-rh o))
+    ,(td-class-s align-right (obs-windir o))
     (td ,(obs-wintxt o))
-    ,(td-class-s "label" (obs-windspeed o))
-    ,(td-class-s "label" (obs-gust o))
-    ,(td-class-s "label" (obs-viz o))
-    (td ,(obs-cover o)) (td ,(obs-ceil o))))
+    ,(td-class-s align-right (obs-windspeed o))
+    ,(td-class-s align-right (obs-gust o))
+    ,(td-class-s align-right (obs-viz o))
+    ,(td-class-s "skyceil" (obs-cover o))
+    ,(td-class-s "skyceil" (obs-ceil o))))
 
 (define jsons-hourly-72 (take hourly-json 72))
 
