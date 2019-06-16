@@ -26,11 +26,11 @@
   
 (define (sky cover)
   (let ([eighths (/ cover (/ 100 8.))])
-  (cond [(<  eighths 1) "SKC"]
-        [(<= eighths 2) "FEW"]
-        [(<= eighths 4) "SCT"]
-        [(<= eighths 7) "BKN"]
-        [else "OVC"])))
+    (cond [(<  eighths 1) "SKC"]
+          [(<= eighths 2) "FEW"]
+          [(<= eighths 4) "SCT"]
+          [(<= eighths 7) "BKN"]
+          [else "OVC"])))
   
 (define (fmt-i-03d n)
   (let ((s (format "~a" n)))
@@ -86,7 +86,7 @@
    (format "~a°F" (exact-round (raw-obs-dewpoint r)))
    (if (raw-obs-precip? r) "rain" "")
    (raw-obs-wx r)
-   (if (raw-obs-day? r) "day" "night")
+   (raw-obs-day? r)
    (let ([x (raw-obs-rain-in r)])
      (if (< x 0.001) "" (format "~a in" x)))
    (let ([x (exact-round (raw-obs-prob-rain r))])
@@ -110,9 +110,9 @@
 (define rxi-thunderstorms #rx"(?i:thunderstorms)")
 (define rxi-t-storms #rx"(?i:t-storms)")
 
-(define (obs->row o)
+(define (obs->tr o)
   `(tr
-    (td ,(obs-dt o))
+    ,(td-class-s (if (obs-day? o) "day" "night") (obs-dt o))
     (td "")
     ,(let ([x (obs-wx o)])
        (cond [(regexp-match rxi-showers x)
@@ -124,46 +124,43 @@
     ,(td-class-s "label" (obs-prob-rain o))
     ,(td-class-s "label" (obs-rain-in o))
     ,(let ([x (obs-precip? o)])
-      (if (= 0 (string-length x))
-          (list 'td x)
-          (td-class-s "green" x)))
+       (if (= 0 (string-length x))
+           (list 'td x)
+           (td-class-s "green" x)))
     ,(td-class-s "label" (obs-realfeel o))
     ,(td-class-s "label" (obs-temp o))
     ,(td-class-s "label" (obs-dewpoint o))
     ,(td-class-s "label" (obs-rh o))
-    (td ,(obs-day? o))
     (td ,(obs-windir o))
     (td ,(obs-wintxt o))
     ,(td-class-s "label" (obs-windspeed o))
     ,(td-class-s "label" (obs-gust o))
     ,(td-class-s "label" (obs-viz o))
-    (td ,(obs-cover o)) (td ,(obs-ceil o))
-    )
-  )
+    (td ,(obs-cover o)) (td ,(obs-ceil o))))
 
-(define hourly-json-72 (take hourly-json 72))
-(define jsons (group-by (λ (h)
-            (let ([dt (hash-ref h 'DateTime)])
-              (substring dt 8 10)
-              ))
-          hourly-json-72))
+(define jsons-hourly-72 (take hourly-json 72))
 
-(define (detail-table-rows day-json)
-  (map (λ (x)
-         (obs->row (raw->obs (js->raw-obs x))))
-       day-json))
+(define jsons-grouped-by-day
+  (group-by (λ (h) (substring (hash-ref h 'DateTime) 8 10))
+            jsons-hourly-72))
+
+(define (detail-table-rows day-jsons)
+  (map (λ (json)
+         (obs->tr (raw->obs (js->raw-obs json))))
+       day-jsons))
 
 (define (gen-hourly-table json)
-  (append `(table (tr (th "DateTime")
-                      (th "Heat")
-                      (th "Weather")
-                      (th "Rain") (th "Amt") (th "Type")
-                      (th "Feel") (th "Temp") (th "DP") (th "Hum")
-                      (th "Light")
-                      (th "Wind") (th "Dir") (th "Speed") (th "Gust")
-                      (th "Viz")
-                      (th "Sky") (th "Ceil")))
-          (detail-table-rows json)))
+  (list 'div
+        '(p)
+        (append `(table (tr (th "DateTime")
+                            (th "Heat")
+                            (th "Weather")
+                            (th "Rain") (th "Amt") (th "Type")
+                            (th "Feel") (th "Temp") (th "DP") (th "Hum")
+                            (th "Wind") (th "Dir") (th "Speed") (th "Gust")
+                            (th "Viz")
+                            (th "Sky") (th "Ceil")))
+                (detail-table-rows json))))
 
 (define head-title (format "~a ~a hour hourly forecast" location-short-name hours))
 
@@ -172,24 +169,27 @@
 
 (define (gen-page)
   `(html (head (title ,head-title)
-                (link ((rel "stylesheet")
-                       (href ,css-path)
-                       (type "text/css")))
-                ,(gen-body))))
+               (link ((rel "stylesheet")
+                      (href ,css-path)
+                      (type "text/css")))
+               ,(gen-body))))
 
 (define (gen-body)
-  `(body ,(gen-div)))
+  `(body ,(gen-top)
+         ,(gen-hourly-tables-divs)))
 
-(define (gen-div)
-  (let ([hourly-tables (append (map (λ (j) (gen-hourly-table j)) jsons))])
-     (append
-      (list 'div)
-      (list '((class "test")))
-      (list (list 'h1 `(string-append ,(number->string hours)
-                                      " hour forecast for " location-long-name)))
-      (list (list 'h3 "from AccuWeather API data"))
-      (list (list 'p '((class "compgen")) computer-generated))
-      hourly-tables)))
+(define (gen-top)
+  `(div ((class "test"))
+        (h1 ,(string-append (number->string hours) " hour forecast for " location-long-name))
+        (h3 "from AccuWeather API data")
+        (p ((class "compgen")) ,computer-generated)))
+
+(define (gen-hourly-tables-divs)
+  (let ([hourly-tables
+         (append (map (λ (j)
+                        (gen-hourly-table j))
+                      jsons-grouped-by-day))])
+    (append '(div) hourly-tables)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Process Web Request
