@@ -165,7 +165,7 @@
                       (th "Sky") (th "Ceil")))
           (detail-table-rows json)))
 
-(define head-title (format "GAP ~a hour hourly forecast" hours))
+(define head-title (format "~a ~a hour hourly forecast" location-short-name hours))
 
 (define computer-generated
   (string-append "computer generated as of " (substring (datetime->iso8601 (now)) 0 19)))
@@ -185,7 +185,8 @@
      (append
       (list 'div)
       (list '((class "test")))
-      (list (list 'h1 `(string-append ,(number->string hours) " hour forecast for Fort Indiantown Gap")))
+      (list (list 'h1 `(string-append ,(number->string hours)
+                                      " hour forecast for " location-long-name)))
       (list (list 'h3 "from AccuWeather API data"))
       (list (list 'p '((class "compgen")) computer-generated))
       hourly-tables)))
