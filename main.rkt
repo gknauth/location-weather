@@ -23,6 +23,53 @@
 (struct raw-obs (ceil cover dt dewpoint precip? wx day? rain-in prob-rain realfeel rh temp uv uvtext viz wxicon windir wintxt windspeed gust) #:transparent)
   
 (struct obs (ceil cover dt dewpoint precip? wx day? rain-in prob-rain realfeel rh temp uv uvtext viz wxicon windir wintxt windspeed gust) #:transparent)
+
+(define const-hPa 1012.0)
+
+(define (osha-wbgt tempc-web-bulb tempc-globe tempc-air)
+  (+ (* 0.7 tempc-web-bulb)
+     (* 0.2 tempc-globe)
+     (* 0.1 tempc-air)))
+
+(define (meters-per-hour miles-per-hour)
+  (* 1609.34 meters-per-hour))
+
+(define const-sigma 5.67e-8)
+(define const-h 0.315)
+
+(define (atmospheric-vapor-pressure dewpointc ambient-tempc hPa)
+  (* (exp (/ (* 17.67 (- dewpointc ambient-tempc))
+             (+ dewpointc 243.5)))
+     (+ 1.0007 (* 0.00000346 hPa))
+     (* 6.112
+        (exp (/ (* 17.502 ambient-tempc)
+                (+ 240.97 ambient-tempc))))))
+
+(define (thermal-emmissivity dewpointc ambient-tempc hPa)
+  (* 0.575 (expt (atmospheric-vapor-pressure dewpointc ambient-tempc hPa) 1/7)))
+
+(define (wbgt-B solar-watts-per-meter-squared
+                direct-beam-radiation-from-sun diffuse-radiation-from-sun zenith-r
+                dewpointc ambient-tempc hPa)
+  (+ (* solar-watts-per-meter-squared
+        (+ (/ direct-beam-radiation-from-sun
+              (* 4 const-sigma (cos zenith-r)))
+           (* (/ 1.2 const-sigma) diffuse-radiation-from-sun)))
+     (* (thermal-emmissivity dewpointc ambient-tempc hPa)
+        (expt ambient-tempc 4))))
+
+(define (wbgt-C wind-meters-per-hour)
+  (/ (* const-h (expt wind-meters-per-hour 0.58)) 5.53865e-8))
+
+(define (tempc-globe wind-meters-per-hour ambient-tempc dewpointc solar-watts-per-meter-squared
+                     direct-beam-radiation-from-sun diffuse-radiation-from-sun zenith-r hPa)
+  (let ([C (wbgt-C wind-meters-per-hour)])
+    (/ (+ (wbgt-B solar-watts-per-meter-squared
+                  direct-beam-radiation-from-sun diffuse-radiation-from-sun zenith-r
+                  dewpointc ambient-tempc hPa)
+          (* C ambient-tempc)
+          7680000)
+       (+ C 256000))))
   
 (define (sky cover)
   (let ([eighths (/ cover (/ 100 8.))])
@@ -40,6 +87,14 @@
   
 (define (feet-hundreds ft)
   (fmt-i-03d (exact-round (/ ft 100.))))
+
+(define (heat-category-class tempf)
+  (let ([x (first (heat-category (string->number (substring tempf 2 4))))])
+    (cond [(= x 2) "heatgreen"]
+          [(= x 3) "heatyellow"]
+          [(= x 4) "heatred"]
+          [(= x 5) "heatblack"]
+          [else "heatwhite"])))
 
 (define (heat-category wbgt)
   (cond [(and (>= wbgt 78.0) (< wbgt 82.0)) (list 1 #f)]
@@ -110,12 +165,12 @@
 (define rxi-thunderstorms #rx"(?i:thunderstorms)")
 (define rxi-t-storms #rx"(?i:t-storms)")
 
-(define align-right "label")
+(define align-right "ra")
 
 (define (obs->tr o)
   `(tr
     ,(td-class-s (if (obs-day? o) "day" "night") (obs-dt o))
-    (td "")
+    (td "") ;,(td-class-s (heat-category-class (obs-realfeel o)) "")
     ,(let ([x (obs-wx o)])
        (cond [(regexp-match rxi-showers x)
               (td-class-s "green" x)]
@@ -138,8 +193,8 @@
     ,(td-class-s align-right (obs-windspeed o))
     ,(td-class-s align-right (obs-gust o))
     ,(td-class-s align-right (obs-viz o))
-    ,(td-class-s "skyceil" (obs-cover o))
-    ,(td-class-s "skyceil" (obs-ceil o))))
+    ,(td-class-s align-right (obs-cover o))
+    ,(td-class-s align-right (obs-ceil o))))
 
 (define jsons-hourly-72 (take hourly-json 72))
 
