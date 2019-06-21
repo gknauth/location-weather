@@ -12,7 +12,7 @@
      (* 0.2 tempc-globe)
      (* 0.1 tempc-air)))
 
-(define (meters-per-hour miles-per-hour)
+(define (mi/h->m/h miles-per-hour)
   (* 1609.34 miles-per-hour))
 
 (define const-sigma 5.67e-8)
@@ -45,18 +45,40 @@
      (* (thermal-emmissivity dewpointc ambient-tempc hPa)
         (expt ambient-tempc 4))))
 
-(define (wbgt-part-C wind-meters-per-hour)
-  (/ (* const-h (expt wind-meters-per-hour 0.58)) 5.53865e-8))
+(define (wbgt-part-C wind-mi/h->m/h)
+  (/ (* const-h (expt wind-mi/h->m/h 0.58)) 5.53865e-8))
 
-(define (wbgt-C wind-meters-per-hour ambient-tempc dewpointc solar-watts-per-meter-squared
-                direct-beam-radiation-from-sun diffuse-radiation-from-sun zenith-r hPa)
-  (let ([C (wbgt-part-C wind-meters-per-hour)])
+(define (wbgt-C wind-m/h ambient-tempc dewpointc
+                solar-watts-per-meter-squared
+                direct-beam-radiation-from-sun
+                diffuse-radiation-from-sun
+                zenith-r
+                hPa)
+  (let ([C (wbgt-part-C wind-m/h)])
     (/ (+ (wbgt-part-B solar-watts-per-meter-squared
                        direct-beam-radiation-from-sun diffuse-radiation-from-sun zenith-r
-                       dewpointc ambient-tempc hPa)
+                       dewpointc
+                       ambient-tempc
+                       hPa)
           (* C ambient-tempc)
           7680000)
        (+ C 256000))))
+
+(define (wbgt-F wind-mi/h ambient-tempf dewpointf
+                solar-watts-per-meter-squared
+                direct-beam-radiation-from-sun
+                diffuse-radiation-from-sun
+                zenith-r
+                hPa)
+  (let ([wind-m/h (mi/h->m/h wind-mi/h)]
+        [dewpointc (f2c dewpointf)]
+        [ambient-tempc (f2c ambient-tempf)])
+    (wbgt-C wind-m/h ambient-tempc dewpointc
+                solar-watts-per-meter-squared
+                direct-beam-radiation-from-sun
+                diffuse-radiation-from-sun
+                zenith-r
+                hPa)))
 
 (define (wbgt-fahrenheit o)
   (c2f (wbgt-celsius o)))
@@ -64,7 +86,7 @@
 (define (wbgt-celsius o)
   (let* ([r (obs-raw o)])
     (wbgt-C
-     (meters-per-hour (raw-obs-windspeed r))
+     (mi/h->m/h (raw-obs-windspeed r))
      (f2c (raw-obs-temp r))
      (f2c (raw-obs-dewpoint r))
      (est-irradiance (obs-cover o) (raw-obs-day? r))
@@ -73,6 +95,7 @@
      zenith-radians
      1011.85)))
 
+; cover is 0..100
 (define (sky cover)
   (let ([eighths (/ cover (/ 100 8.))])
     (cond [(<  eighths 1) "SKC"]
@@ -98,7 +121,7 @@
         [(eq? kind 'diffuse) (cond [(eq? season 'summer) 0.25]
                                    [(eq? season 'winter) 0.33]
                                    [else 0.29])]
-        [else 0.5]))
+        [else 0]))
   
 (define (heat-category-class tempf)
   (let ([x (heat-category tempf)])
@@ -121,3 +144,41 @@
 (define (day-of-week wday)
   (vector-ref days-of-week wday))
 
+(module+ test
+  ;; Tests to be run with raco test
+  (require rackunit)
+  (check-equal? (sky 100) "OVC")
+  (check-equal? (sky 88) "OVC")
+  (check-equal? (sky 85) "BKN")
+  (check-equal? (sky 51) "BKN")
+  (check-equal? (sky 40) "SCT")
+  (check-equal? (sky 30) "SCT")
+  (check-equal? (sky 20) "FEW")
+  (check-equal? (sky 10) "SKC")
+  (check-equal? (sky 0) "SKC")
+  (check-equal? (est-irradiance "SKC" #t) 990)
+  (check-equal? (est-irradiance "FEW" #t) 980)
+  (check-equal? (est-irradiance "SCT" #t) 980)
+  (check-equal? (est-irradiance "BKN" #t) 710)
+  (check-equal? (est-irradiance "OVC" #t) 250)
+  (check-equal? (est-irradiance "SKC" #f) 0)
+  (check-equal? (radiation-from-sun 'direct-beam 'summer) 0.75)
+  (check-equal? (radiation-from-sun 'direct-beam 'winter) 0.67)
+  (check-equal? (radiation-from-sun 'direct-beam 'other) 0.71)
+  (check-equal? (radiation-from-sun 'diffuse 'summer) 0.25)
+  (check-equal? (radiation-from-sun 'diffuse 'winter) 0.33)
+  (check-equal? (radiation-from-sun 'diffuse 'other) 0.29)
+  (check-equal? (radiation-from-sun 'foo 'bar) 0)
+  (check-equal? (heat-category-class 75.0) "heatwhite")
+  (check-equal? (heat-category-class 80.0) "heatwhite")
+  (check-equal? (heat-category-class 84.0) "heatgreen")
+  (check-equal? (heat-category-class 87.0) "heatyellow")
+  (check-equal? (heat-category-class 89.0) "heatred")
+  (check-equal? (heat-category-class 95.0) "heatblack")
+  (check-equal? (heat-category 75.0) 0)
+  (check-equal? (heat-category 80.0) 1)
+  (check-equal? (heat-category 84.0) 2)
+  (check-equal? (heat-category 87.0) 3)
+  (check-equal? (heat-category 89.0) 4)
+  (check-equal? (heat-category 95.0) 5)
+  )

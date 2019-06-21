@@ -15,7 +15,7 @@
 
 (define s-hourly-url
   (string-append
-   "http://apidev.accuweather.com/forecasts/v1/hourly/240hour/"
+   "http://apidev.accuweather.com/forecasts/v1/hourly/72hour/"
    location-key "?apikey=" accuwx-api-key "&details=true"))
 
 (define (get-hourly-forecast)
