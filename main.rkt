@@ -41,6 +41,7 @@
    (hash-ref h 'UVIndexText)
    (hash-ref (hash-ref h 'Visibility) 'Value)
    (hash-ref h 'WeatherIcon)
+   (hash-ref (hash-ref h 'WetBulbTemperature) 'Value)
    (hash-ref (hash-ref (hash-ref h 'Wind) 'Direction) 'Degrees)
    (hash-ref (hash-ref (hash-ref h 'Wind) 'Direction) 'English)
    (hash-ref (hash-ref (hash-ref h 'Wind) 'Speed) 'Value)
@@ -68,6 +69,7 @@
    (raw-obs-uvtext r)
    (format "~a mi"(let ([x (raw-obs-viz r)]) (if (< x 3.0) x (exact-round x))))
    (raw-obs-wxicon r)
+   (format "~a°F" (exact-round (raw-obs-wetbulb r)))
    (format "~a°" (raw-obs-windir r))
    (raw-obs-wintxt r)
    (let ([x (raw-obs-windspeed r)]) (if (>= x 0.5) (format "~a mph" (exact-round x)) "calm"))
@@ -83,11 +85,15 @@
 
 (define align-right "ra")
 
+(define show-heat? #f)
+
 (define (obs->tr o)
   `(tr
     ,(td-class-s (if (obs-day? o) "day" "night") (obs-dt o))
-    (td "")
-    ;,(td-class-s (heat-category-class (wbgt-fahrenheit o)) (number->string(wbgt-fahrenheit o)))
+    ,(if show-heat?
+        (let ([heatf (wbgt-F-o o)])
+          (td-class-s (heat-category-class heatf) (format "~a°F" (exact-round heatf))))
+        (list 'td ""))
     ,(let ([x (obs-wx o)])
        (cond [(regexp-match rxi-showers x)
               (td-class-s "green" x)]
@@ -104,6 +110,7 @@
     ,(td-class-s align-right (obs-realfeel o))
     ,(td-class-s align-right (obs-temp o))
     ,(td-class-s align-right (obs-dewpoint o))
+    ,(td-class-s align-right (obs-wetbulb o))
     ,(td-class-s align-right (obs-rh o))
     ,(td-class-s align-right (obs-windir o))
     (td ,(obs-wintxt o))
@@ -113,11 +120,11 @@
     ,(td-class-s align-right (obs-cover o))
     ,(td-class-s align-right (obs-ceil o))))
 
-(define jsons-hourly-72 (take hourly-json 72))
+(define jsons-hourly (take hourly-json hours))
 
 (define jsons-grouped-by-day
   (group-by (λ (h) (substring (hash-ref h 'DateTime) 8 10))
-            jsons-hourly-72))
+            jsons-hourly))
 
 (define (detail-table-rows day-jsons)
   (map (λ (json)
@@ -131,7 +138,7 @@
                             (th "Heat")
                             (th "Weather")
                             (th "Rain") (th "Amt") (th "Type")
-                            (th "Feel") (th "Temp") (th "DP") (th "Hum")
+                            (th "Feel") (th "Temp") (th "DP") (th "WB") (th "Hum")
                             (th "Wind") (th "Dir") (th "Speed") (th "Gust")
                             (th "Viz")
                             (th "Sky") (th "Ceil")))
